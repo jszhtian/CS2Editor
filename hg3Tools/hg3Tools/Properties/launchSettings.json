@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "hg3Tools": {
+      "commandName": "Project",
+      "commandLineArgs": "i sys_meswnd_name.hg3"
+    }
+  }
+}

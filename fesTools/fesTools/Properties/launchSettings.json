@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "fesTools": {
+      "commandName": "Project",
+      "commandLineArgs": "p meswnd0.txt"
+    }
+  }
+}

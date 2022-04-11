@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.1.32328.378
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "hg3Tools", "hg3Tools\hg3Tools.csproj", "{144F1AC6-3EAD-438B-AC74-17243DF2F717}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{144F1AC6-3EAD-438B-AC74-17243DF2F717}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{144F1AC6-3EAD-438B-AC74-17243DF2F717}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{144F1AC6-3EAD-438B-AC74-17243DF2F717}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{144F1AC6-3EAD-438B-AC74-17243DF2F717}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {9971875C-B5B9-4BBC-ABD8-F4A8494ABEFD}
+	EndGlobalSection
+EndGlobal
