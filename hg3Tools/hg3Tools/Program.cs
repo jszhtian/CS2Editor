@@ -45,14 +45,25 @@ namespace hg3Tools
         [JsonIgnore]
         public byte[]? CPtypePayloads { get; set; }
 
-        public int GetChunkSize()
+        internal Tuple<int,int> GetUnpaddingChunkSize()
         {
-            return Hg3SliceHead.GetChunkSize() + Hg3TagInfo.GetChunkSize() + Tag.GetChunkSize() +
+            int unpaddingSize = Hg3SliceHead.GetChunkSize() + Hg3TagInfo.GetChunkSize() + Tag.GetChunkSize() +
                    Hg3FormatInfo.GetChunkSize() + Format.GetChunkSize() + ImagePayloads.Length +
                    Hg3CPtype.GetChunkSize() + CPtypePayloads.Length;
+            int paddingSize = 0;
+            if(unpaddingSize % 4!=0)
+                paddingSize=4 - (unpaddingSize % 4);
+            return new Tuple<int, int>(unpaddingSize, paddingSize);
+        }
+
+        public int GetChunkSize()
+        {
+            var(unpadding,padding)= GetUnpaddingChunkSize();
+            return unpadding + padding;
         }
         public void WriteToStream(BinaryWriter writer)
         {
+            var (_, paddingSize) = GetUnpaddingChunkSize();
             Head.WriteToStream(writer);
             TagInfo.WriteToStream(writer);
             Tag.WriteToStream(writer);
@@ -61,6 +72,9 @@ namespace hg3Tools
             writer.Write(ImagePayloads,0,ImagePayloads.Length);
             CPtype.WriteToStream(writer);
             writer.Write(CPtypePayloads);
+            byte[] padding = new byte[paddingSize];
+            Array.Fill(padding,(byte)0);
+            writer.Write(padding,0,paddingSize);
         }
     }
 
@@ -352,6 +366,7 @@ namespace hg3Tools
                 if (hg3Slice.Head.OffsetToNextSlice == 0)
                     break;
                 nextPosition += (int)hg3Slice.Head.OffsetToNextSlice;
+                /*
                 int expectedSize = (int)hg3Slice.Head.OffsetToNextSlice;
                 int actualSize = hg3Slice.GetChunkSize();
                 if (expectedSize != actualSize)
@@ -359,6 +374,7 @@ namespace hg3Tools
                     var warningText = string.Format("At Image Index:{0}\nExpect Size:{1}\nActual Size:{2}", hg3Slice.Head.Index,expectedSize, actualSize);
                     Console.WriteLine(warningText);
                 }
+                */
                 _reader.BaseStream.Position = nextPosition;
             }
 
@@ -399,12 +415,18 @@ namespace hg3Tools
                 collection.Header = arcHead;
                 collection.SliceList = sliceList;
             }
+
+            string? nameBase;
             switch (option)
             {
                 case "u":
-                    foreach (var img in collection.SliceList)
+                    for (var i=0; i<collection.SliceList.Count; ++i)
                     {
-                        string fileName = string.Format("{0}_{1}.hg3",file.Replace(".hg3", ""),img.Head.Index);
+                        var img=collection.SliceList[i];
+                        nameBase = file.Replace(".hg3", "");
+                        if (!Directory.Exists(nameBase))
+                            Directory.CreateDirectory(nameBase);
+                        var fileName = string.Format("./{0}/{0}_{1}_{2}.hg3", nameBase, i,img.Head.Index);
                         using (var fs = File.OpenWrite(fileName))
                         {
                             var bw = new BinaryWriter(fs);
@@ -423,7 +445,53 @@ namespace hg3Tools
                     }
                     break;
                 case "p":
-                    throw new NotImplementedException("not yet");
+                    //throw new NotImplementedException("not yet");
+                    nameBase = file.Replace(".hg3", "");
+                    if (!Directory.Exists(nameBase))
+                        throw new SystemException("No replace directory found!");
+                    using (var fs = File.OpenWrite(file + ".new"))
+                    {
+                        var bw = new BinaryWriter(fs);
+                        var newHead = new Hg3ArcHead()
+                        {
+                            Magic = Hg3ArcHead.ReturnExpectChars(),
+                            SlicHeadSize = 0xc
+                        };
+                        newHead.WriteToStream(bw);
+                        for (var i=0;i<collection.SliceList.Count;++i)
+                        {
+                            var writenImg = collection.SliceList[i];
+                            var fileName = string.Format("./{0}/{0}_{1}_{2}.hg3", nameBase, i, writenImg.Head.Index);
+                            if (File.Exists(fileName))
+                            {
+                                using (var newFS = File.OpenRead(fileName))
+                                {
+                                    var bs = new BinaryReader(newFS);
+                                    var reader = new Hg3Reader(bs);
+                                    var (hdr, imgList) = reader.ReadAll();
+                                    writenImg.CPtypePayloads = imgList[0].CPtypePayloads;
+                                    writenImg.ImagePayloads = imgList[0].ImagePayloads;
+                                    writenImg.Format=imgList[0].Format;
+                                    writenImg.Head.OffsetToNextSlice = (uint)writenImg.GetChunkSize();
+                                    writenImg.FormatInfo.Size = (UInt32)(
+                                        imgList[0].ImagePayloads.Length + writenImg.Format.GetChunkSize());
+                                    writenImg.FormatInfo.OffsetToNextChunk =
+                                        writenImg.FormatInfo.Size + (UInt32)Hg3FormatInfo.GetChunkSize();
+                                }
+                            }
+                            else
+                            {
+                                writenImg.Head.OffsetToNextSlice = (uint)writenImg.GetChunkSize();
+                            }
+
+                            if (i == (collection.SliceList.Count - 1))
+                                writenImg.Head.OffsetToNextSlice = 0;
+                            writenImg.WriteToStream(bw);
+                        }
+
+                        
+                    }
+                    break;
                 case "i":
                 {
                     using (var fileStream = File.OpenRead(file))
