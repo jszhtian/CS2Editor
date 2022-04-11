@@ -24,7 +24,7 @@ namespace hg3Tools
             return 8;
         }
 
-        public void WriteToStream(BinaryWriter writer)
+        public void Write(BinaryWriter writer)
         {
             var magicBytes = Encoding.ASCII.GetBytes(Magic).ToArray();
             writer.Write(magicBytes,0,magicBytes.Length);
@@ -61,16 +61,16 @@ namespace hg3Tools
             var(unpadding,padding)= GetUnpaddingChunkSize();
             return unpadding + padding;
         }
-        public void WriteToStream(BinaryWriter writer)
+        public void Write(BinaryWriter writer)
         {
             var (_, paddingSize) = GetUnpaddingChunkSize();
-            Head.WriteToStream(writer);
-            TagInfo.WriteToStream(writer);
-            Tag.WriteToStream(writer);
-            FormatInfo.WriteToStream(writer);
-            Format.WriteToStream(writer);
+            Head.Write(writer);
+            TagInfo.Write(writer);
+            Tag.Write(writer);
+            FormatInfo.Write(writer);
+            Format.Write(writer);
             writer.Write(ImagePayloads,0,ImagePayloads.Length);
-            CPtype.WriteToStream(writer);
+            CPtype.Write(writer);
             writer.Write(CPtypePayloads);
             byte[] padding = new byte[paddingSize];
             Array.Fill(padding,(byte)0);
@@ -87,7 +87,7 @@ namespace hg3Tools
         {
             return 12;
         }
-        public void WriteToStream(BinaryWriter writer)
+        public void Write(BinaryWriter writer)
         {
             writer.Write(Unk0);
             writer.Write(OffsetToNextSlice);
@@ -104,7 +104,7 @@ namespace hg3Tools
         {
             return 16;
         }
-        public void WriteToStream(BinaryWriter writer)
+        public void Write(BinaryWriter writer)
         {
             var magicBytes = Encoding.ASCII.GetBytes(Magic).ToArray();
             writer.Write(magicBytes, 0, magicBytes.Length);
@@ -121,7 +121,7 @@ namespace hg3Tools
             throw new NotImplementedException("shouldn't be here");
         }
 
-        public virtual void WriteToStream(BinaryWriter writer)
+        public virtual void Write(BinaryWriter writer)
         {
             throw new NotImplementedException("shouldn't be here");
         }
@@ -157,7 +157,7 @@ namespace hg3Tools
         {
             return 40;
         }
-        public override void WriteToStream(BinaryWriter writer)
+        public override void Write(BinaryWriter writer)
         {
             writer.Write(Width);
             writer.Write(Height);
@@ -178,7 +178,7 @@ namespace hg3Tools
         {
             throw new NotImplementedException("shouldn't be here");
         }
-        public virtual void WriteToStream(BinaryWriter writer)
+        public virtual void Write(BinaryWriter writer)
         {
             throw new NotImplementedException("shouldn't be here");
         }
@@ -193,7 +193,7 @@ namespace hg3Tools
         {
             return 16;
         }
-        public void WriteToStream(BinaryWriter writer)
+        public void Write(BinaryWriter writer)
         {
             var magicBytes = Encoding.ASCII.GetBytes(Magic).ToArray();
             writer.Write(magicBytes, 0, magicBytes.Length);
@@ -227,7 +227,7 @@ namespace hg3Tools
         {
             return 24;
         }
-        public override void WriteToStream(BinaryWriter writer)
+        public override void Write(BinaryWriter writer)
         {
             writer.Write(Unk0);
             writer.Write(Height);
@@ -260,7 +260,7 @@ namespace hg3Tools
         {
             return 0x10;
         }
-        public void WriteToStream(BinaryWriter writer)
+        public void Write(BinaryWriter writer)
         {
             var magicBytes = Encoding.ASCII.GetBytes(Magic).ToArray();
             writer.Write(magicBytes, 0, magicBytes.Length);
@@ -382,6 +382,31 @@ namespace hg3Tools
         }
     }
 
+    public class Hg3Writer
+    {
+        private readonly BinaryWriter _writer;
+
+        public Hg3Writer(BinaryWriter fileWriter)
+        {
+            _writer = fileWriter;
+        }
+
+        public void Write(Hg3ArcHead head, List<Hg3Slice> list)
+        {
+            head.Write(_writer);
+            for (var i = 0; i < list.Count; ++i)
+            {
+                list[i].Write(_writer);
+            }
+        }
+        public void Write(Hg3ArcHead head, Hg3Slice slice)
+        {
+            head.Write(_writer);
+            slice.Write(_writer);
+        }
+
+    }
+
     class Hg3ArcCollection
     {
         public Hg3ArcHead? Header { get; set; }
@@ -430,6 +455,7 @@ namespace hg3Tools
                         using (var fs = File.OpenWrite(fileName))
                         {
                             var bw = new BinaryWriter(fs);
+                            var writer=new Hg3Writer(bw);
                             var newHead = new Hg3ArcHead()
                             {
                                 Magic = Hg3ArcHead.ReturnExpectChars(),
@@ -439,8 +465,7 @@ namespace hg3Tools
                             writenImg.Head.Index=0;
                             writenImg.Head.OffsetToNextSlice = 0;
                             writenImg.Head.Unk0 = 0x0300;
-                            newHead.WriteToStream(bw);
-                            writenImg.WriteToStream(bw);
+                            writer.Write(newHead,writenImg);
                         }
                     }
                     break;
@@ -452,16 +477,15 @@ namespace hg3Tools
                     using (var fs = File.OpenWrite(file + ".new"))
                     {
                         var bw = new BinaryWriter(fs);
+                        var writer = new Hg3Writer(bw);
                         var newHead = new Hg3ArcHead()
                         {
                             Magic = Hg3ArcHead.ReturnExpectChars(),
                             SlicHeadSize = 0xc
                         };
-                        newHead.WriteToStream(bw);
                         for (var i=0;i<collection.SliceList.Count;++i)
                         {
-                            var writenImg = collection.SliceList[i];
-                            var fileName = string.Format("./{0}/{0}_{1}_{2}.hg3", nameBase, i, writenImg.Head.Index);
+                            var fileName = string.Format("./{0}/{0}_{1}_{2}.hg3", nameBase, i, collection.SliceList[i].Head.Index);
                             if (File.Exists(fileName))
                             {
                                 using (var newFS = File.OpenRead(fileName))
@@ -469,27 +493,25 @@ namespace hg3Tools
                                     var bs = new BinaryReader(newFS);
                                     var reader = new Hg3Reader(bs);
                                     var (hdr, imgList) = reader.ReadAll();
-                                    writenImg.CPtypePayloads = imgList[0].CPtypePayloads;
-                                    writenImg.ImagePayloads = imgList[0].ImagePayloads;
-                                    writenImg.Format=imgList[0].Format;
-                                    writenImg.Head.OffsetToNextSlice = (uint)writenImg.GetChunkSize();
-                                    writenImg.FormatInfo.Size = (UInt32)(
-                                        imgList[0].ImagePayloads.Length + writenImg.Format.GetChunkSize());
-                                    writenImg.FormatInfo.OffsetToNextChunk =
-                                        writenImg.FormatInfo.Size + (UInt32)Hg3FormatInfo.GetChunkSize();
+                                    collection.SliceList[i].CPtypePayloads = imgList[0].CPtypePayloads;
+                                    collection.SliceList[i].ImagePayloads = imgList[0].ImagePayloads;
+                                    collection.SliceList[i].Format=imgList[0].Format;
+                                    collection.SliceList[i].Head.OffsetToNextSlice = (uint)collection.SliceList[i].GetChunkSize();
+                                    collection.SliceList[i].FormatInfo.Size = (UInt32)(
+                                        imgList[0].ImagePayloads.Length + collection.SliceList[i].Format.GetChunkSize());
+                                    collection.SliceList[i].FormatInfo.OffsetToNextChunk =
+                                        collection.SliceList[i].FormatInfo.Size + (UInt32)Hg3FormatInfo.GetChunkSize();
                                 }
                             }
                             else
                             {
-                                writenImg.Head.OffsetToNextSlice = (uint)writenImg.GetChunkSize();
+                                collection.SliceList[i].Head.OffsetToNextSlice = (uint)collection.SliceList[i].GetChunkSize();
                             }
 
                             if (i == (collection.SliceList.Count - 1))
-                                writenImg.Head.OffsetToNextSlice = 0;
-                            writenImg.WriteToStream(bw);
+                                collection.SliceList[i].Head.OffsetToNextSlice = 0;
                         }
-
-                        
+                        writer.Write(newHead, collection.SliceList);
                     }
                     break;
                 case "i":
